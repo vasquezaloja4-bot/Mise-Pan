@@ -31,52 +31,68 @@ jobs:
       - name: Install dependencies and build web assets
         run: |
           npm install --legacy-peer-deps
-          npm install --no-save --legacy-peer-deps @capacitor/core @capacitor/cli @capacitor/android
+          npm install --no-save --legacy-peer-deps @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
           npm run build
 
       - name: Initialize & Sync Capacitor Android
         run: |
-          rm -f capacitor.config.ts
+          rm -rf android capacitor.config.ts capacitor.config.json
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.vasquezaloja.misepan",
             "appName": "Mise & Pan",
-            "webDir": "dist"
+            "webDir": "dist",
+            "server": {
+              "androidScheme": "https"
+            }
           }
           EOF
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
+          npx cap add android
           npx cap sync android
 
-      - name: Fix duplicate Kotlin stdlib classes
+      - name: Configure Android permissions and Kotlin resolution
         run: |
-          python3 -c '
-app_gradle = "android/app/build.gradle"
-with open(app_gradle, "r", encoding="utf-8") as f:
-    content = f.read()
+          python3 - << 'EOF'
+          from pathlib import Path
 
-fix_block = """
-configurations.all {
-    resolutionStrategy {
-        force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
-        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
-        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
-    }
-}
-"""
+          # 1. Add permissions to AndroidManifest.xml
+          manifest_path = Path("android/app/src/main/AndroidManifest.xml")
+          if manifest_path.exists():
+              manifest = manifest_path.read_text(encoding="utf-8")
+              perms = """    <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+          """
+              if "android.permission.CAMERA" not in manifest and "<application" in manifest:
+                  manifest = manifest.replace("<application", perms + "\n    <application", 1)
+                  manifest_path.write_text(manifest, encoding="utf-8")
 
-if "force \"org.jetbrains.kotlin:kotlin-stdlib" not in content:
-    content = content + "\n" + fix_block
-    with open(app_gradle, "w", encoding="utf-8") as f:
-        f.write(content)
-'
+          # 2. Align Kotlin stdlib across all Gradle projects
+          root_gradle = Path("android/build.gradle")
+          if root_gradle.exists():
+              gradle_txt = root_gradle.read_text(encoding="utf-8")
+              subprojects_fix = """
+          allprojects {
+              configurations.configureEach {
+                  resolutionStrategy {
+                      force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+                  }
+              }
+          }
+          """
+              if "configurations.configureEach" not in gradle_txt:
+                  gradle_txt = gradle_txt + "\n" + subprojects_fix
+                  root_gradle.write_text(gradle_txt, encoding="utf-8")
+          EOF
 
       - name: Build Debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
