@@ -36,9 +36,14 @@ jobs:
 
       - name: Initialize & Sync Capacitor Android
         run: |
-          if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
-            npx cap init "Mise & Pan" "com.vasquezaloja.misepan" --web-dir=dist
-          fi
+          rm -f capacitor.config.ts
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.vasquezaloja.misepan",
+            "appName": "Mise & Pan",
+            "webDir": "dist"
+          }
+          EOF
           if [ ! -d "android" ]; then
             npx cap add android
           fi
