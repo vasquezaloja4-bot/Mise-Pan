@@ -1,5 +1,5 @@
 
-name: Build Android APK
+    name: Build Android APK
 
 on:
   push:
@@ -49,6 +49,29 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
+
+      - name: Fix duplicate Kotlin stdlib classes
+        run: |
+          python3 -c '
+app_gradle = "android/app/build.gradle"
+with open(app_gradle, "r", encoding="utf-8") as f:
+    content = f.read()
+
+fix_block = """
+configurations.all {
+    resolutionStrategy {
+        force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+    }
+}
+"""
+
+if "force \"org.jetbrains.kotlin:kotlin-stdlib" not in content:
+    content = content + "\n" + fix_block
+    with open(app_gradle, "w", encoding="utf-8") as f:
+        f.write(content)
+'
 
       - name: Build Debug APK
         working-directory: android
