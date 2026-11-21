@@ -1,0 +1,6 @@
+{
+  "name": "Mise & Pan",
+  "description": "Capture ingredients with your camera or photos and discover dishes you can cook right away.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
